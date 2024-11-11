@@ -1,0 +1,62 @@
+---
+import type { HTMLAttributes } from "astro/types";
+
+export interface Dimensions {
+	width: string;
+	height: string;
+}
+
+export interface Props extends HTMLAttributes<"canvas"> {
+	id: string;
+	size: Dimensions | "full";
+	backgroundColor?: string;
+}
+
+
+
+const { id, size = "full", backgroundColor = "black", ...attrs } = Astro.props as Props;
+const { width, height } = size === "full" ? {} : size;
+---
+
+<canvas id={id} {...attrs}></canvas>
+
+<style define:vars={{ width, height }}>
+	canvas {
+		display: block;
+		width: var(--width, 100%);
+		height: var(--height, 100%);
+	}
+</style>
+
+<script define:vars={{ id, size, backgroundColor }}>
+	const canvas = document.querySelector(`#${id}`);
+	const context = canvas.getContext("2d");
+
+	if (size === "full") {
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+	}
+	else {
+		canvas.width = parseInt(size.width.replace("px", ""));
+		canvas.height = parseInt(size.height.replace("px", ""));
+	}
+
+	const gameLoop = () => {
+		context.clearRect(0, 0, canvas.width, canvas.height);
+		context.fillStyle = backgroundColor;
+		context.fillRect(0, 0, canvas.width, canvas.height);
+		const drawEvent = new CustomEvent("draw", { detail: { context } });
+		canvas.dispatchEvent(drawEvent);
+		requestAnimationFrame(gameLoop);
+	};
+
+	requestAnimationFrame(gameLoop);
+
+	const onResize = () => {
+		if (size !== "full") return;
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+	};
+	document.addEventListener("resize", onResize);
+	onResize();
+</script>

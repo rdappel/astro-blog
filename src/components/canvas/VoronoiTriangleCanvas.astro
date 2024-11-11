@@ -1,0 +1,195 @@
+---
+import Canvas from "./Canvas.astro";
+
+const id = "voronoi-triangle-canvas";
+---
+
+<Canvas
+	id={id}
+	size={{ width: "340px", height: "340px" }}
+	backgroundColor="rgb(240, 240, 240)"
+/>
+
+<script type="module" define:vars={{ id }}>
+
+	import {
+		drawLine,
+		drawPoint,
+		drawCircle,
+		drawVector,
+		drawTriangle,
+		drawPolygon
+	} from "/scripts/drawPrimUtils.js";
+
+	import {
+		getClosestPointOnLineSegment,
+		getCentroid, 
+		isPointInTriangle
+	} from "/scripts/mathUtils.js";
+
+	const canvas = document.querySelector(`#${id}`);
+
+	const pointSize = 10;
+
+	const red = "rgb(136, 34, 34)";
+	const blue = "rgb(34, 34, 136)";
+	const green = "rgb(34, 136, 34)";
+	const green50 = "rgb(34, 136, 34, 0.5)";
+	const red50 = "rgb(136, 34, 34, 0.5)";
+	const black30 = "rgb(0, 0, 0, 0.3)";
+
+	let cursorOverPoint = null;
+	let selectedPoint = null;
+	let closestPoint = { x: 129.13, y: 138.77 }
+	let closestSide = 'CA';
+
+	const controlPoint = { x: 150, y: 95, color: blue };
+
+	const triPointA = { x: 110, y: 130, color: red };
+	const triPointB = { x: 90, y: 245, color: red };
+	const triPointC = { x: 230, y: 185, color: red };
+
+	const centroid = getCentroid(triPointA, triPointB, triPointC);
+
+	const vectorAB = { x: triPointB.x - triPointA.x, y: triPointB.y - triPointA.y };
+	const vectorBC = { x: triPointC.x - triPointB.x, y: triPointC.y - triPointB.y };
+	const vectorCA = { x: triPointA.x - triPointC.x, y: triPointA.y - triPointC.y };
+
+	const scaleAmount = 3;
+	const vectorABNormal = { x: -vectorAB.y * scaleAmount, y: vectorAB.x  * scaleAmount };
+	const vectorBCNormal = { x: -vectorBC.y * scaleAmount, y: vectorBC.x  * scaleAmount };
+	const vectorCANormal = { x: -vectorCA.y * scaleAmount, y: vectorCA.x  * scaleAmount };
+
+	const voronoiPointAB1 = { x: triPointA.x + vectorABNormal.x, y: triPointA.y + vectorABNormal.y, color: blue };
+	const voronoiPointAB2 = { x: triPointB.x + vectorABNormal.x, y: triPointB.y + vectorABNormal.y, color: blue };
+
+	const voronoiPointBC1 = { x: triPointB.x + vectorBCNormal.x, y: triPointB.y + vectorBCNormal.y, color: blue };
+	const voronoiPointBC2 = { x: triPointC.x + vectorBCNormal.x, y: triPointC.y + vectorBCNormal.y, color: blue };
+
+	const voronoiPointCA1 = { x: triPointC.x + vectorCANormal.x, y: triPointC.y + vectorCANormal.y, color: blue };
+	const voronoiPointCA2 = { x: triPointA.x + vectorCANormal.x, y: triPointA.y + vectorCANormal.y, color: blue };
+	
+
+	const getMouseOverPoint = ({ clientX, clientY }) => {
+		const rect = canvas.getBoundingClientRect();
+		const x = clientX - rect.left;
+		const y = clientY - rect.top;
+
+		if (Math.abs(x - controlPoint.x) < 5 && Math.abs(y - controlPoint.y) < 5) {
+			return controlPoint;
+		}		
+		return null;
+	};
+
+	canvas.addEventListener("draw", (event) => {
+		const { context } = event.detail;
+
+		const inMainTriangle = isPointInTriangle(controlPoint, triPointA, triPointB, triPointC);
+		
+		const colors = [
+			(!inMainTriangle && closestSide === 'AB') ? green50 : 'transparent',
+			(!inMainTriangle && closestSide === 'BC') ? green50 : 'transparent',
+			(!inMainTriangle && closestSide === 'CA') ? green50 : 'transparent',
+			(!closestSide && closestPoint === triPointA) ? green50 :'transparent',
+			(!closestSide && closestPoint === triPointB) ? green50 :'transparent',
+			(!closestSide && closestPoint === triPointC) ? green50 :'transparent',
+		]
+
+		const strokes = [
+			(!inMainTriangle && closestSide === 'AB') ? green : red50,
+			(!inMainTriangle && closestSide === 'BC') ? green : red50,
+			(!inMainTriangle && closestSide === 'CA') ? green : red50,
+		]
+
+		// closest to sides
+		drawPolygon(context, [triPointA, voronoiPointAB1, voronoiPointAB2, triPointB], strokes[0], colors[0]); // left
+		drawPolygon(context, [triPointB, voronoiPointBC1, voronoiPointBC2, triPointC], strokes[1], colors[1]); // bottom
+		drawPolygon(context, [triPointC, voronoiPointCA1, voronoiPointCA2, triPointA], strokes[2], colors[2]); // top
+
+		// closest to corners
+		drawPolygon(context, [triPointA, voronoiPointAB1, voronoiPointCA2], 'transparent', colors[3]); // top left
+		drawPolygon(context, [triPointB, voronoiPointBC1, voronoiPointAB2], 'transparent', colors[4]); // bottom left
+		drawPolygon(context, [triPointC, voronoiPointCA1, voronoiPointBC2], 'transparent', colors[5]); // right
+
+		
+		if (inMainTriangle) {
+			drawTriangle(context, triPointA, triPointB, triPointC, red);
+			if (closestSide === 'AB') {
+				drawTriangle(context, triPointB, triPointC, centroid, 'transparent', red50);
+				drawTriangle(context, triPointC, triPointA, centroid, 'transparent', red50);
+				drawTriangle(context, triPointA, triPointB, centroid, green, green50);
+				drawLine(context, centroid, triPointC, black30);
+			} else if (closestSide === 'BC') {
+				drawTriangle(context, triPointA, triPointB, centroid, 'transparent', red50);
+				drawTriangle(context, triPointC, triPointA, centroid, 'transparent', red50);
+				drawTriangle(context, triPointB, triPointC, centroid, green, green50);
+				drawLine(context, centroid, triPointA, black30);
+			} else if (closestSide === 'CA') {
+				drawTriangle(context, triPointA, triPointB, centroid, 'transparent', red50);
+				drawTriangle(context, triPointB, triPointC, centroid, 'transparent', red50);
+				drawTriangle(context, triPointC, triPointA, centroid, green, green50);
+				drawLine(context, centroid, triPointB, black30);
+			}
+		}
+		else {
+			drawTriangle(context, triPointA, triPointB, triPointC, red, red50);
+			drawLine(context, centroid, triPointA, black30);
+			drawLine(context, centroid, triPointB, black30);
+			drawLine(context, centroid, triPointC, black30);
+		}
+
+		if (closestPoint) {
+			drawLine(context, controlPoint, closestPoint, green, 2);
+		}
+
+		// draw control point
+		drawPoint(context, controlPoint, pointSize);
+
+	});
+
+	canvas.addEventListener("mousedown", (event) => {
+		selectedPoint = getMouseOverPoint(event);
+	});
+
+	canvas.addEventListener("mouseup", () => (selectedPoint = null));
+
+	canvas.addEventListener("mousemove", (event) => {
+		if (selectedPoint) {
+			const rect = canvas.getBoundingClientRect();
+			selectedPoint.x = event.clientX - rect.left;
+			selectedPoint.y = event.clientY - rect.top;
+
+			const distSqToA = (triPointA.x - controlPoint.x) ** 2 + (triPointA.y - controlPoint.y) ** 2;
+			const distSqToB = (triPointB.x - controlPoint.x) ** 2 + (triPointB.y - controlPoint.y) ** 2;
+			const distSqToC = (triPointC.x - controlPoint.x) ** 2 + (triPointC.y - controlPoint.y) ** 2;
+
+			const pointOnAB = getClosestPointOnLineSegment(triPointA, triPointB, controlPoint);
+			const pointOnBC = getClosestPointOnLineSegment(triPointB, triPointC, controlPoint);
+			const pointOnCA = getClosestPointOnLineSegment(triPointC, triPointA, controlPoint);
+
+			const distSqToAB = (pointOnAB.x - controlPoint.x) ** 2 + (pointOnAB.y - controlPoint.y) ** 2;
+			const distSqToBC = (pointOnBC.x - controlPoint.x) ** 2 + (pointOnBC.y - controlPoint.y) ** 2;
+			const distSqToCA = (pointOnCA.x - controlPoint.x) ** 2 + (pointOnCA.y - controlPoint.y) ** 2;
+
+			const minDist = Math.min(distSqToA, distSqToB, distSqToC, distSqToAB, distSqToBC, distSqToCA);
+
+			closestPoint = minDist === distSqToA ? triPointA :
+				minDist === distSqToB ? triPointB :
+				minDist === distSqToC ? triPointC :
+				minDist === distSqToAB ? pointOnAB :
+				minDist === distSqToBC ? pointOnBC :
+				minDist === distSqToCA ? pointOnCA : null;
+
+			closestSide = minDist === distSqToA ? null :
+				minDist === distSqToB ? null :
+				minDist === distSqToC ? null :
+				minDist === distSqToAB ? 'AB' :
+				minDist === distSqToBC ? 'BC' :
+				minDist === distSqToCA ? 'CA' : null;
+		}
+
+		cursorOverPoint = getMouseOverPoint(event);
+		canvas.style.cursor = cursorOverPoint ? "pointer" : "default";
+	});
+
+</script>

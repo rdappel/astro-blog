@@ -1,0 +1,139 @@
+---
+import Canvas from "./Canvas.astro";
+
+const id = "vector-projection-canvas";
+---
+
+<Canvas
+	id={id}
+	size={{ width: "340px", height: "340px" }}
+	backgroundColor="rgb(240, 240, 240)"
+/>
+
+<script type="module" define:vars={{ id }}>
+
+	import { extendLine } from "/scripts/mathUtils.js";
+	import { drawLine, drawPoint, drawCircle, drawVector } from "/scripts/drawPrimUtils.js";
+
+	const canvas = document.querySelector(`#${id}`);
+
+	const red = "rgb(136, 34, 34)";
+	const blue = "rgb(34, 34, 136)";
+	const green = "rgb(34, 136, 34)";
+	const red50 = "rgb(136, 34, 34, 0.5)";
+	const blue50 = "rgb(34, 34, 136, 0.5)";
+	const black30 = "rgb(0, 0, 0, 0.3)";
+
+	const font = "12px sans-serif";
+
+	const dragDistance = 10;
+	const pointSize = 10;
+
+	let cursorOverPoint = null;
+	let p0 = { x: 150, y: 90, color: blue };
+	let p1 = { x: 70, y: 250, color: red };
+	let p2 = { x: 250, y: 145, color: red };
+
+	let selectedPoint = null;
+
+	const getMouseOverPoint = ({ clientX, clientY }) => {
+		const rect = canvas.getBoundingClientRect();
+		const x = clientX - rect.left;
+		const y = clientY - rect.top;
+		if (
+			Math.abs(x - p0.x) < dragDistance &&
+			Math.abs(y - p0.y) < dragDistance
+		) {
+			return p0;
+		} else if (
+			Math.abs(x - p1.x) < dragDistance &&
+			Math.abs(y - p1.y) < dragDistance
+		) {
+			return p1;
+		} else if (
+			Math.abs(x - p2.x) < dragDistance &&
+			Math.abs(y - p2.y) < dragDistance
+		) {
+			return p2;
+		}
+		return null;
+	};
+
+	canvas.addEventListener("draw", (event) => {
+		const { context } = event.detail;
+		context.font = font;
+
+		const vecA = { x: p0.x - p1.x, y: p0.y - p1.y };
+		const vecB = { x: p2.x - p1.x, y: p2.y - p1.y };
+		const dot = vecA.x * vecB.x + vecA.y * vecB.y;
+		const t = dot / (vecB.x * vecB.x + vecB.y * vecB.y);
+		const projVec = { x: t * vecB.x, y: t * vecB.y };
+		const projPoint = { x: projVec.x + p1.x, y: projVec.y + p1.y };
+
+		const projVecLength = Math.sqrt(projVec.x ** 2 + projVec.y ** 2);
+		const projVecUnit = {
+			x: projVec.x / projVecLength,
+			y: projVec.y / projVecLength,
+		};
+
+		const oppositeVec = { x: p0.x - projPoint.x, y: p0.y - projPoint.y };
+		const oppositeVecLength = Math.sqrt(oppositeVec.x ** 2 + oppositeVec.y ** 2);
+		const oppositeVecUnit = {
+			x: oppositeVec.x / oppositeVecLength,
+			y: oppositeVec.y / oppositeVecLength,
+		};
+
+		const extendedLine = extendLine(p1, p2, 500);
+		drawLine(context, extendedLine.p0, extendedLine.p1, red50, 1);
+
+		drawLine(context, p0, projPoint, black30, 1);
+
+		const boxSize = 10;
+		if (oppositeVecLength >= boxSize && projVecLength >= boxSize) {
+			const boxP0 = {
+				x: projPoint.x - (projVecUnit.x * boxSize),
+				y: projPoint.y - (projVecUnit.y * boxSize)
+			};
+			
+			const boxP1 = {
+				x: projPoint.x + (oppositeVecUnit.x * boxSize),
+				y: projPoint.y + (oppositeVecUnit.y * boxSize)
+			};
+
+			const boxP2 = {
+				y: boxP1.y - (projVecUnit.y * boxSize),
+				x: boxP1.x - (projVecUnit.x * boxSize)
+			};
+
+			drawLine(context, boxP0, boxP2, black30, 1);
+			drawLine(context, boxP1, boxP2, black30, 1);
+		}
+
+		drawVector(context, p1, p0, blue50, 1);
+		drawVector(context, p1, projPoint, green, 3);
+
+		if (cursorOverPoint) {
+			drawCircle(context, cursorOverPoint, 10, black30);
+		}
+		drawPoint(context, p0, pointSize, 'p0', { x: 7, y: -7 });
+		drawPoint(context, p1, pointSize, 'p1', { x: 7, y: -7 });
+		drawPoint(context, p2, pointSize, 'p2', { x: 7, y: -7 });
+	});
+
+	canvas.addEventListener("mousedown", (event) => {
+		selectedPoint = getMouseOverPoint(event);
+	});
+
+	canvas.addEventListener("mouseup", () => selectedPoint = null );
+
+	canvas.addEventListener("mousemove", (event) => {
+		if (selectedPoint) {
+			const rect = canvas.getBoundingClientRect();
+			selectedPoint.x = event.clientX - rect.left;
+			selectedPoint.y = event.clientY - rect.top;
+		}
+
+		cursorOverPoint = getMouseOverPoint(event);
+		canvas.style.cursor = cursorOverPoint ? "pointer" : "default";
+	});
+</script>

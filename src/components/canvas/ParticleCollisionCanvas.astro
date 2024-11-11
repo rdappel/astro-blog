@@ -1,0 +1,118 @@
+---
+import Canvas from "./Canvas.astro";
+
+const id = "particle-collision-canvas";
+---
+
+<Canvas
+	id={id}
+	size={{ width: "340px", height: "340px" }}
+	backgroundColor="rgb(240, 240, 240)"
+/>
+
+<script type="module" define:vars={{ id }}>
+	import {
+		drawLine,
+		drawPoint,
+		drawVector,
+	} from "/scripts/drawPrimUtils.js";
+
+	import { getLeft } from "/scripts/mathUtils.js";
+
+	const canvas = document.querySelector(`#${id}`);
+
+	const pointSize = 10;
+
+	const red = "rgb(136, 34, 34)";
+	const blue = "rgb(34, 34, 136)";
+	const green = "rgb(34, 136, 34)";
+	const red50 = "rgb(136, 34, 34, 0.5)";
+	const blue50 = "rgb(34, 34, 136, 0.5)";
+	const black30 = "rgb(0, 0, 0, 0.3)";
+
+	const frictionMin = { x: 20, y: 290 };
+	const frictionMax = { x: 320, y: 290 };
+	const frictionX = (frictionMin.x + frictionMax.x) / 2;
+	const bounceMin = { x: 20, y: 320 };
+	const bounceMax = { x: 320, y: 320 };
+	const bounceX = (bounceMin.x + bounceMax.x) / 2;
+
+	const fallVectorOffset = { x: 40, y: 70 };
+	const fallVector = { x: 130, y: 160 };
+
+	let cursorOverPoint = null;
+	let selectedPoint = null;
+
+	let frictionPoint = { x: frictionX, y: 290, color: red, min: frictionMin.x, max: frictionMax.x };
+	let bouncePoint = { x: bounceX, y: 320, color: blue, min: bounceMin.x, max: bounceMax.x };
+	
+	const getMouseOverPoint = ({ clientX, clientY }) => {
+		const rect = canvas.getBoundingClientRect();
+		const x = clientX - rect.left;
+		const y = clientY - rect.top;
+		if (Math.abs(x - frictionPoint.x) < pointSize && Math.abs(y - frictionPoint.y) < pointSize) {
+			return frictionPoint;
+		}
+		
+		if (Math.abs(x - bouncePoint.x) < pointSize && Math.abs(y - bouncePoint.y) < pointSize) {
+			return bouncePoint;
+		}
+		
+		return null;
+	};
+
+	canvas.addEventListener("draw", (event) => {
+		const { context } = event.detail;
+
+		const floorY = 230;
+		drawLine(context, { x: 0, y: floorY }, { x: 340, y: floorY }, black30);
+
+		const fallVectorEnd = {
+			x: fallVectorOffset.x + fallVector.x,
+			y: fallVectorOffset.y + fallVector.y,
+		};
+		drawVector(context, fallVectorOffset, { x: fallVectorOffset.x, y: fallVectorEnd.y}, blue50, 1);
+		drawVector(context, { x: fallVectorOffset.x, y: fallVectorEnd.y}, fallVectorEnd, red50, 1);
+		drawVector(context, fallVectorOffset, fallVectorEnd, green, 1);
+
+		let bounceAmount = (bouncePoint.x - bounceMin.x) / (bounceMax.x - bounceMin.x);
+		let frictionAmount = (frictionPoint.x - frictionMin.x) / (frictionMax.x - frictionMin.x);
+
+		const bounceVector = getLeft(Object.assign({}, fallVector));
+		bounceVector.y *= bounceAmount;
+		bounceVector.x *= 1 - frictionAmount;
+
+		const bounceVectorEnd = {
+			x: fallVectorEnd.x + bounceVector.x,
+			y: fallVectorEnd.y + bounceVector.y,
+		};
+		drawVector(context, fallVectorEnd, bounceVectorEnd, green);
+		drawVector(context, fallVectorEnd, { x: bounceVectorEnd.x, y: fallVectorEnd.y }, red50);
+		drawVector(context, { x: bounceVectorEnd.x, y: fallVectorEnd.y }, bounceVectorEnd, blue50);
+
+		drawLine(context, frictionMin, frictionMax, red);
+		drawPoint(context, frictionPoint, pointSize, "friction");
+
+		drawLine(context, bounceMin, bounceMax, blue);
+		drawPoint(context, bouncePoint, pointSize, "bounce");
+	});
+
+	canvas.addEventListener("mousedown", (event) => {
+		selectedPoint = getMouseOverPoint(event);
+	});
+
+	canvas.addEventListener("mouseup", () => (selectedPoint = null));
+
+	canvas.addEventListener("mousemove", (event) => {
+		if (selectedPoint) {
+			const rect = canvas.getBoundingClientRect();
+			selectedPoint.x = event.clientX - rect.left;
+			if (selectedPoint.x < selectedPoint.min) selectedPoint.x = selectedPoint.min;
+			if (selectedPoint.x > selectedPoint.max) selectedPoint.x = selectedPoint.max;
+		}
+
+		cursorOverPoint = getMouseOverPoint(event);
+		canvas.style.cursor = cursorOverPoint ? "pointer" : "default";
+	});
+
+</script>

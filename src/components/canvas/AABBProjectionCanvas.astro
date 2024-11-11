@@ -1,0 +1,196 @@
+---
+import Canvas from "./Canvas.astro";
+
+const id = "aabb-projection-canvas";
+---
+
+<Canvas
+	id={id}
+	size={{ width: "340px", height: "340px" }}
+	backgroundColor="rgb(240, 240, 240)"
+/>
+
+<script type="module" define:vars={{ id }}>
+	import {
+		drawLine,
+		drawPoint,
+		drawCircle,
+		drawVector,
+		drawRectangle
+	} from "/scripts/drawPrimUtils.js";
+
+	import {
+		getRight, 
+		extendLine,
+		getClosestPointOnLineSegment,
+	} from "/scripts/mathUtils.js";
+
+	const canvas = document.querySelector(`#${id}`);
+
+	const pointSize = 10;
+
+	const red = "rgb(136, 34, 34)";
+	const blue = "rgb(34, 34, 136)";
+	const green = "rgb(34, 136, 34)";
+	const green50 = "rgb(34, 136, 34, 0.5)";
+	const red50 = "rgb(136, 34, 34, 0.5)";
+	const blue50 = "rgb(34, 34, 136, 0.5)";
+	const black30 = "rgb(0, 0, 0, 0.3)";
+
+	let cursorOverPoint = null;
+	let selectedPoint = null;
+	let controlDirection = { x: 0, y: 1 };
+	const controlDistance = 170 - 20;
+
+	const controlPoint = { x: 170, y: 320, color: red };
+
+	const rectangle = { center: { x: 170, y: 170 }, width: 100, height: 80 };
+	const rectangleTop = { x: rectangle.center.x, y: rectangle.center.y - rectangle.height / 2 };
+	const rectangleBottom = { x: rectangle.center.x, y: rectangle.center.y + rectangle.height / 2 };
+	const rectangleLeft = { x: rectangle.center.x - rectangle.width / 2, y: rectangle.center.y };
+	const rectangleRight = { x: rectangle.center.x + rectangle.width / 2, y: rectangle.center.y };
+
+	const lineDistFromControl = 40;
+	const startP0 = { x: 170, y: controlPoint.y - lineDistFromControl };
+	const startP1 = { x: 170 - lineDistFromControl, y: controlPoint.y - lineDistFromControl };
+	const { p0 : lineP0, p1: lineP1 } = extendLine(startP0, startP1, 500);
+
+	const getMouseOverPoint = ({ clientX, clientY }) => {
+		const rect = canvas.getBoundingClientRect();
+		const x = clientX - rect.left;
+		const y = clientY - rect.top;
+		if (Math.abs(x - controlPoint.x) < 5 && Math.abs(y - controlPoint.y) < 5) {
+			return controlPoint;
+		}		
+		return null;
+	};
+
+	canvas.addEventListener("draw", (event) => {
+		const { context } = event.detail;
+
+		drawRectangle(context, rectangle.center, rectangle.width, rectangle.height, blue, blue50);
+		const horizontalPoint = controlPoint.x < rectangle.center.x ? rectangleLeft : rectangleRight
+		const verticalPoint = controlPoint.y < rectangle.center.y ? rectangleTop : rectangleBottom
+		drawVector(context, rectangle.center, horizontalPoint, blue);
+		drawVector(context, rectangle.center, verticalPoint, blue);
+
+		const fullPoint1 = {
+			x: horizontalPoint.x + -verticalPoint.x + rectangle.center.x,
+			y: horizontalPoint.y + -verticalPoint.y + rectangle.center.y
+		}
+		const fullPoint2 = {
+			x: -horizontalPoint.x + verticalPoint.x + rectangle.center.x,
+			y: -horizontalPoint.y + verticalPoint.y + rectangle.center.y
+		}
+
+		// control line
+		drawLine(context, lineP0, lineP1, red50);
+
+		// perpendicular line
+		const centerPointOnLine = getClosestPointOnLineSegment(lineP0, lineP1, rectangle.center);
+		drawLine(context, rectangle.center, centerPointOnLine, black30);
+
+		// draw 90 degree angle box
+		const vector = { x: rectangle.center.x - centerPointOnLine.x, y: rectangle.center.y - centerPointOnLine.y };
+		const vectorLength = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+		const normalizedVector = { x: vector.x / vectorLength, y: vector.y / vectorLength };
+		
+		const boxSize = 10;
+		const boxCorner1 = {
+			x: centerPointOnLine.x + normalizedVector.x * boxSize,
+			y: centerPointOnLine.y + normalizedVector.y * boxSize
+		}
+		const right = getRight(normalizedVector);
+		const boxCorner2 = {
+			x: centerPointOnLine.x - right.x * boxSize,
+			y: centerPointOnLine.y - right.y * boxSize
+		}
+		const boxCorner3 = {
+			x: boxCorner2.x + normalizedVector.x * boxSize,
+			y: boxCorner2.y + normalizedVector.y * boxSize
+		}
+		drawLine(context, boxCorner3, boxCorner1, black30);
+		drawLine(context, boxCorner3, boxCorner2, black30);
+
+
+		// half width lines
+		const halfPointH = getClosestPointOnLineSegment(lineP0, lineP1, horizontalPoint);
+		drawLine(context, horizontalPoint, halfPointH, green50);
+		const halfPointV = getClosestPointOnLineSegment(lineP0, lineP1, verticalPoint);
+		drawLine(context, verticalPoint, halfPointV, green50);
+
+		const halfLineOffset = -12;
+		const halfLineStart = {
+			x: halfPointH.x + normalizedVector.x * halfLineOffset,
+			y: halfPointH.y + normalizedVector.y * halfLineOffset
+		}
+		const halfLineEnd = {
+			x: halfPointV.x + normalizedVector.x * halfLineOffset,
+			y: halfPointV.y + normalizedVector.y * halfLineOffset
+		}
+		drawLine(context, halfLineStart, halfLineEnd, green, 2);
+
+		// full width lines
+		const fullPoint1OnLine = getClosestPointOnLineSegment(lineP0, lineP1, fullPoint1);
+		drawLine(context, fullPoint1, fullPoint1OnLine, blue50);
+		const fullPoint2OnLine = getClosestPointOnLineSegment(lineP0, lineP1, fullPoint2);
+		drawLine(context, fullPoint2, fullPoint2OnLine, blue50);
+
+		const fullLineOffset = -24;
+		const fullLineStart = {
+			x: fullPoint1OnLine.x + normalizedVector.x * fullLineOffset,
+			y: fullPoint1OnLine.y + normalizedVector.y * fullLineOffset
+		}
+		const fullLineEnd = {
+			x: fullPoint2OnLine.x + normalizedVector.x * fullLineOffset,
+			y: fullPoint2OnLine.y + normalizedVector.y * fullLineOffset
+		}
+		drawLine(context, fullLineStart, fullLineEnd, blue, 2);
+
+
+		if (selectedPoint) drawCircle(context, controlPoint, 10, black30);
+		drawPoint(context, controlPoint, pointSize);
+	});
+
+	canvas.addEventListener("mousedown", (event) => {
+		selectedPoint = getMouseOverPoint(event);
+	});
+
+	canvas.addEventListener("mouseup", () => (selectedPoint = null));
+
+	canvas.addEventListener("mousemove", (event) => {
+		if (selectedPoint) {
+			const rect = canvas.getBoundingClientRect();
+			const x = event.clientX - rect.left;
+			const y = event.clientY - rect.top;
+
+			const vec = { x, y }
+			const center = { x: 170, y: 170 };
+			const diff = { x: vec.x - center.x, y: vec.y - center.y };
+			const angle = Math.atan2(diff.y, diff.x);
+			controlDirection = { x: Math.cos(angle), y: Math.sin(angle) };
+			
+			controlPoint.x = center.x + controlDirection.x * controlDistance;
+			controlPoint.y = center.y + controlDirection.y * controlDistance;
+			const offsetX = controlDirection.x * lineDistFromControl;
+			const offsetY = controlDirection.y * lineDistFromControl;
+
+			lineP0.x = controlPoint.x - offsetX;
+			lineP0.y = controlPoint.y - offsetY;
+
+			const left = getRight({ x: -offsetX, y: -offsetY });
+			lineP1.x = lineP0.x + left.x
+			lineP1.y = lineP0.y + left.y
+
+			const { p0, p1 } = extendLine(lineP0, lineP1, 500);
+			lineP0.x = p0.x;
+			lineP0.y = p0.y;
+			lineP1.x = p1.x;
+			lineP1.y = p1.y;
+		}
+
+		cursorOverPoint = getMouseOverPoint(event);
+		canvas.style.cursor = cursorOverPoint ? "pointer" : "default";
+	});
+
+</script>
